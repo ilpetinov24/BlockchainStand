@@ -58,6 +58,9 @@ def RunCommands(commands):
 
 
 def CheckDockerRun():
+    """
+        Функция для проверки Docker. Проверяет запущен ли он или нет.
+    """
     commandForCheck = ["docker", "info"]
 
     output = subprocess.run(commandForCheck, capture_output=True)
@@ -70,7 +73,10 @@ def CheckDockerRun():
 
 def CheckDockerNetwork():
     """
+        Функция для проверки Docker-сети.
 
+        Проверяет запущена ли сеть с название blockchain-stand.
+        Если сеть не запущена, то скрипт завершает работу.
     """
     
     commandsForCheck = [
@@ -90,6 +96,7 @@ def CheckDockerNetwork():
 
 def CheckGenesisFile(genesisPath):
     """
+        Функция для проверки корректности genesis.json.
     """
     if not genesisPath.exists():
         print("Err!: genesis.json не найден!")
@@ -260,8 +267,7 @@ def InitializeNode(dataDirectory):
 
 def StartNode(nodeName, httpPort, p2pPort, dataDirectory):
     """
-        Данная функция запускает ноду с выделенным свободным IP
-        в Docker сети.
+        Данная функция запускает ноду с выделенным свободным IP в Docker сети.
     """
 
     genesisPath = CONFIG_DIR / "genesis.json"
@@ -322,7 +328,6 @@ def main():
 
     CheckGenesisFile(genesisPath)
     print()
-
 
     print("Создание изолированной ноды:")
     print(f"    HTTP: {httpPort}")
