@@ -6,13 +6,6 @@
     Для соединения обязательно, чтобы ноды были созданы и находились в одной сети.
 """
 
-import json
-import sys
-import subprocess
-import re
-from pathlib import Path
-
-
 CONFIG_DIR = Path.home() / "blockchain_stand" / "config"
 
 
