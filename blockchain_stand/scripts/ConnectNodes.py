@@ -11,12 +11,11 @@ def main():
         print("Docker не запущен!")
         sys.exit(1)
     
-    check = CheckDockerNetwork()
-
-    if not check:
+    if not CheckDockerNetwork():
         print(f"Err!: Docker-сеть {DOCKER_NETWORK} не найдена!")
         sys.exit(1)
     else: print(f"Docker-сеть {DOCKER_NETWORK} существует!")
+    
     print()
 
     firstNode = sys.argv[1]
@@ -35,7 +34,7 @@ def main():
         sys.exit(1)
     
 
-    print(f"Получаем enode ноды {secondNode}:")
+    print(f"1. Получаем Enode-идентификатор узла {secondNode}:")
     
     enodeSecondNode = GetEnode(secondNode)
 
@@ -45,7 +44,7 @@ def main():
     
     print(f"Enode: {enodeSecondNode}")
 
-    print(f"\nПодключаем {firstNode} к {secondNode}")
+    print(f"\n2. Подключаем {firstNode} к {secondNode}")
 
     if AddPeer(firstNode, enodeSecondNode):
         print("Успешно!")

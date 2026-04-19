@@ -3,7 +3,7 @@ from Functions import *
 
 def main():
     if not CheckDockerRun():
-        print("Docker не запущен!")
+        print("Err!: Docker не запущен!")
         sys.exit(1)
 
     if len(sys.argv) < 5:
@@ -20,21 +20,21 @@ def main():
 
     dataDir = BASE_DIR / "nodes" / nodeName / "data"
 
-    check = CheckDockerNetwork()
-    if not check:
+    if not CheckDockerNetwork():
         print(f"Err!: Docker-сеть {DOCKER_NETWORK} не найдена!")
         sys.exit(1)
     else: print(f"Docker-сеть {DOCKER_NETWORK} существует!")
+    
     print()
 
     print("Проверка genesis.json:")
     check = CheckGenesisFile(genesisPath)
 
-    if check:
-        print("Успешно!")
+    if check: print("Успешно!")
     else:
         print("Err!: genesis.json не прошел проверку!")
         sys.exit(1)
+    
     print()
 
     print("Создание узла с следующими параметрами:")
@@ -60,7 +60,7 @@ def main():
         print("Err!: Не получилось инициализировать узел!")
         sys.exit(1)
 
-    print("\nЗапуск:")
+    print("\n3. Запуск:")
     StartNode(nodeName, httpPort, p2pPort, dataDir)
 
     print("\nУзел запущен:")

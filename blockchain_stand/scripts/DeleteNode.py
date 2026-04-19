@@ -1,24 +1,28 @@
-import json
-import sys
-import subprocess
-import re
-import ipaddress
-from pathlib import Path
-
-
-BASE_DIR = Path.home() / "blockchain_stand"
-CONFIG_DIR = BASE_DIR / "config"
-DOCKER_NETWORK = "blockchain_stand"
-DOCKER_IMAGE = "ethereum/client-go:v1.13.15"
-
 from Functions import *
+
 
 def main():
     if not CheckDockerRun():
         print("Docker не запущен!")
         sys.exit(1)
+
+    if len(sys.argv) < 1:
+        print("Err!: Недостаточно аргументов!")
+        print("Пример: DeleteNode.py <nodeName>")
+        sys.exit(1)
+
+    if not CheckDockerNetwork():
+        print(f"Err!: Docker-сеть {DOCKER_NETWORK} не найдена!")
+        sys.exit(1)
+    else: print(f"Docker-сеть {DOCKER_NETWORK} существует!")
+    
+    print()
+
+    print("1. Остановка и удаление контейнер:")
     
     DeleteContainer(sys.argv[1])
+
+    print("\n2. Удаление данных:")
 
     DeleteNodeData(sys.argv[1])
 
