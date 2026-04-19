@@ -1,33 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-    Данный скрипт предназначен для инициализации сети.
-
-    Что конкретно делает скрипт:
-        1. Он создает файл genesis.json, который определяет правила
-           для создания первого и следующих блоков в сети.
-        2. Создает Docker-сеть с названием blockchain_stand.
-           В этой сети будут находится в дальнейшем созданные узлы.
-        3. Позволяет выбрать один из двух алгоритмов консенсуса: Clique (PoA) или Ethash (PoW)
-        4. Создает начальный узел для алгоритма Clique, который будет валидатором.
-           Для Ethash начальный узел не нужен, так как любой узел в сети может стать
-           майнером.
-        5. Запускает начальный узел.
-    
-    Скрипт для инициализации и дальнейшие скрипты будут автоматически раздавать IP-адреса
-    из созданной Docker-сети для созданных узлов.
-
-        Если Docker-сеть уже была создана, то она не будет создаваться.
-    Такое может произойти, если не был запущен скрипт DeleteAll.py и остался прошлый
-    genesis.json. Перед тем как создавать новый стенд необходимо почистить данные из прошлого.
-
-
-        Из-за особенности Clique для создания сети требуется минимум один валидатор.
-    Это нужно для того, чтобы создавать следующие валидаторы.
-        Чтобы узел стал валидатором другим валидаторам необходимо голосовать за него.
-    Следовательно, если не будет валидаторов, то мы не сможем создавать следующие.
-"""
-
 import json
 import sys
 import subprocess
@@ -73,6 +43,7 @@ def CreateDockerNetwork():
         Создаёт Docker сеть для узлов, если она ещё не была создана.
     """
     
+    # Команда выводит только ID сети
     commandsForCheck = [
         "docker", "network", "ls", 
         "-q", "-f", f"name={DOCKER_NETWORK}"
@@ -82,11 +53,12 @@ def CreateDockerNetwork():
 
     output = subprocess.run(commandsForCheck, capture_output=True, text=True)
 
+    # Проверяем есть ли ID
     if not output.stdout.strip():
-        print(f"Создаём Docker сеть: {DOCKER_NETWORK}")
         subprocess.run(commandsForCreate, check=True)
-    else:
-        print(f"Docker сеть {DOCKER_NETWORK} уже существует!")
+        return True
+
+    return False
 
 
 def GetNextFreeIp():
@@ -103,7 +75,7 @@ def GetNextFreeIp():
     # Из нее мы извлекаем json
     output = subprocess.run(
         ["docker", "network", "inspect", DOCKER_NETWORK,
-         "--format", "{{json .}}"],
+         "-f", "{{json .}}"],
         capture_output=True, text=True
     )
 
@@ -113,25 +85,30 @@ def GetNextFreeIp():
 
     networkInfo = json.loads(output.stdout)
 
-    # Получаем подсеть
+    # Получаем подсеть (Обычно 172.18.0.0/16)
     subNetwork = networkInfo["IPAM"]["Config"][0]["Subnet"]
     network = ipaddress.IPv4Network(subNetwork)
+
     gateway = networkInfo["IPAM"]["Config"][0].get("Gateway")
 
     # Собираем уже занятые IP
-    usedIpAdrrs = set()
+    usedIp = set()
 
     # Сразу добавим шлюз, чтобы случайно его не занять
     if gateway:
-        usedIpAdrrs.add(gateway)
-
+        usedIp.add(gateway)
+    else:
+        print("Err!: Не удалось получить полную информацию о сети!")
+        sys.exit(1)
+    
     for container in networkInfo.get("Containers", {}).values():
-        ip = container.get("IPv4Address", "").split("/")[0]
-        if ip: usedIpAdrrs.add(ip)
+        ip = container.get("IPv4Address", "").split("/")[0] # Маска нам не нужна
+        if ip: usedIp.add(ip)
 
+    # Возвращаем первый свободный IP.
     hosts = list(network.hosts())
     for host in hosts:
-        if str(host) not in usedIpAdrrs:
+        if str(host) not in usedIp:
             return str(host)
 
     print("Err!: Нет свободных IP в Docker сети!")
@@ -152,6 +129,8 @@ def CreateAccountForValidator(dataDirectory, password):
     passwordFile = dataDirectory / "password.txt"
     passwordFile.write_text(password)
 
+    # Запускаем geth, чтобы создать аккаунта
+    # После завершения работы контейнер удаляется, но данные о аккаунте сохраняются
     commandsForCreate = [
         "docker", "run", "--rm",
         "-v", f"{dataDirectory}:/data",
@@ -167,11 +146,9 @@ def CreateAccountForValidator(dataDirectory, password):
 
     if publicKey:
         addr = publicKey.group(0)
-        print(f"Создан аккаунт: {addr}")
         return addr
-    else:
-        print("Err!: Не удалось создать аккаунт!")
-        sys.exit(1)
+
+    return None
 
 
 def CreateGenesisForClique(chainId, period, gasLimit, validatorAddr, balance, outputPath):
@@ -204,12 +181,6 @@ def CreateGenesisForClique(chainId, period, gasLimit, validatorAddr, balance, ou
     with open(outputPath, "w") as f:
         json.dump(genesisFile, f, indent=2)
 
-    print("Файл genesis.json создан (Clique)")
-    print(f"    chainId: {chainId}")
-    print(f"    period: {period} секунд")
-    print(f"    gasLimit: {gasLimit}")
-    print(f"    balance: {balance}")
-    print(f"    validator: {validatorAddr}")
 
 
 def InitBlock(dataDirectory):
@@ -229,7 +200,6 @@ def InitBlock(dataDirectory):
 
     RunCommands(commands)
 
-    print("Genesis-блок создан, база данных инициализирована!")
 
 
 def StartValidatorNode(chainId, nodeName, httpPort, p2pPort, dataDir, addr, password):
@@ -244,8 +214,6 @@ def StartValidatorNode(chainId, nodeName, httpPort, p2pPort, dataDir, addr, pass
     """
     genesisPath = CONFIG_DIR / "genesis.json"
     containerName = f"geth-{nodeName}"
-
-    CreateDockerNetwork()
 
     # Определяем свободный IP заранее
     dockerIp = GetNextFreeIp()
@@ -294,19 +262,30 @@ def main():
     if consensus == "clique":
         if len(sys.argv) != 7:
             print("Err!: Недостаточно аргументов")
-            print("For Clique: clique <chainId> <period> <gasLimit> <balance> <passwordForValidatorAccount>")
+            print("Use: clique <chainId> <period> <gasLimit> <balance> <passwordForValidatorAccount>")
             sys.exit(1)
+        
+        print(f"Создание Docker-сети {DOCKER_NETWORK}:")
+        check = CreateDockerNetwork()
 
+        if check: print(f"\nDocker-сеть {DOCKER_NETWORK} создана!")
+        else: print(f"\nDocker-сеть {DOCKER_NETWORK} уже существует!")
+         
         chainId = int(sys.argv[2])
         period = int(sys.argv[3])
         gasLimit = int(sys.argv[4])
         balance = int(sys.argv[5])
         password = sys.argv[6]
 
-        print("Создание аккаунта для валидатора: \n")
+        print("\nСоздание аккаунта для валидатора:")
         validatorAddress = CreateAccountForValidator(firstNodeDir, password)
 
-        print("\nСоздание genesis.json для Clique (PoA): \n")
+        if not validatorAddress:
+            print("Err!: Не удалось создать аккаунт")
+            sys.exit(1)
+        else: print(f"Создан аккаунт: {validatorAddress}")
+
+        print("\nСоздание genesis.json для Clique (PoA):")
         genesisPath = CONFIG_DIR / "genesis.json"
         
         CreateGenesisForClique(
@@ -314,21 +293,24 @@ def main():
             balance, genesisPath
         )
 
-        print("\nСоздание Genesis-блока: \n")
-        InitBlock(firstNodeDir)
+        print("Файл genesis.json создан (Clique)")
+        print(f"    chainId: {chainId}")
+        print(f"    period: {period} секунд")
+        print(f"    gasLimit: {gasLimit} wei or {gasLimit / 10**18} eth")
+        print(f"    balance: {balance} wei or {balance / 10**18} eth")
+        print(f"    validator: {validatorAddress}")
 
-        print("\nЗапуск ноды-валидатора: \n")
+        print("\nСоздание Genesis-блока:")
+        InitBlock(firstNodeDir)
+        print("Genesis-блок создан, база данных инициализирована!")
+
+        print("\nЗапуск ноды-валидатора:")
         StartValidatorNode(chainId, "validator_node", 8545, 30303, firstNodeDir, validatorAddress, password)
         print()
 
-    elif consensus == "ethash":
-        print("Пока не готов!")
-        sys.exit(1)
     else:
-        print(f"Неправильный аргумент: {consensus}")
-        print("     Используйте: 'clique' или 'ethash'")
+        print("Err!: Используйте clique!")
         sys.exit(1)
-
 
 
 if __name__ == "__main__":

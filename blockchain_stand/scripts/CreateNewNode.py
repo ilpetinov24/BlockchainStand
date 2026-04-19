@@ -1,35 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-    Данный скрипт предназначен для создания новых узлов в сети.
-
-        Перед использованием данного скрипта нужно запустить InitializeNetwork.py.
-    Это обязательное условие для использования следующих скриптов, которые
-    написаны для стенда.
-
-    Что делает скрипт:
-        1. Проверяет была ли создана Docker-сеть с название blockchain_stand.
-           Если сеть не была создана, то скрипт выводит предупреждение и прекращает
-           свою работу.
-        2. Проверяет создан ли файл genesis.json, а также проверяет его на корректность.
-        3. Проверяет был ли создан валидатор, если был выбран алгоритм Clique.
-           Это можно проверить, так как в файле genesis.json содержится эта информация.
-        4. Создает аккаунт для узла.
-        5. Создает сам узел и запускает его.
-
-
-    Пример того как пользоваться данным скриптом:
-        CreateNewNode.py <node_name> <http-порт> <p2p-порт> <пароль>
-    
-        Перед созданием обязательно проверять передаваемые порты, чтобы они не были заняты.
-    Иначе Docker выкинет ошибку, что порт уже занят
-
-        Также важно знать, что данный скрипт не связывает узел с другими.
-    Чтобы связать ноды нужно воспользоваться скриптом ConnectNodes.py
-
-"""
-
-
 import json
 import sys
 import subprocess
@@ -87,11 +55,9 @@ def CheckDockerNetwork():
     output = subprocess.run(commandsForCheck, capture_output=True, text=True)
 
     if not output.stdout.strip():
-        print("Err!: Docker-сеть не была создана!")
-        print("Запустите скрипт InitializeNetwork.py, чтобы пользоваться данным скриптом")
-        sys.exit(1)
-    else:
-        print(f"Docker-сеть {DOCKER_NETWORK} существует!")
+        return False
+    
+    return True
 
 
 def CheckGenesisFile(genesisPath):
@@ -132,13 +98,9 @@ def CheckGenesisFile(genesisPath):
         print("Найдена сеть с алгоритмом Clique")
         return "clique"
     
-    elif "ethash" in genesisConfig:
-        print("Найдена сеть Ethash")
-        return "ethash"
-    
     else:
         print("Err!: genesis.json был создан не правильно!")
-        print("Неизвестный алгоритм консенсуса или отсутсвует его поддержка")
+        print("Неизвестный алгоритм консенсуса или отсутствует его поддержка")
         sys.exit(1)
 
 
@@ -197,10 +159,6 @@ def getNetworkId():
     """
     genesisPath = CONFIG_DIR / "genesis.json"
 
-    if not genesisPath.exists():
-        print("Err!: genesis.json не найден!")
-        sys.exit(1)
-
     with open(genesisPath, "r") as jsonFile:
         genesisFile = json.load(jsonFile)
 
@@ -234,11 +192,9 @@ def CreateAccount(dataDirectory, password):
 
     if publicKey:
         addr = publicKey.group(0)
-        print(f"Создан аккаунт: {addr}")
         return addr
-    else:
-        print("Err!: Не удалось создать аккаунт!")
-        sys.exit(1)
+    
+    return None
 
 
 def InitializeNode(dataDirectory):
@@ -249,7 +205,7 @@ def InitializeNode(dataDirectory):
 
     if not genesisPath.exists():
         print("Err!: genesis.json не найден!")
-        print("     Нужно сначала запустить InitNetwork.py")
+        print("     Нужно сначала запустить InitializeNetwork.py")
         sys.exit(1)
 
     commands = [
@@ -262,7 +218,6 @@ def InitializeNode(dataDirectory):
     ]
 
     RunCommands(commands)
-    print("База данных инициализирована")
 
 
 def StartNode(nodeName, httpPort, p2pPort, dataDirectory):
@@ -301,7 +256,7 @@ def StartNode(nodeName, httpPort, p2pPort, dataDirectory):
         f"--nat=extip:{dockerIp}",
     ])
 
-    print(f"Нода {nodeName} запущена на порту {httpPort} (не связанная)")
+    print(f"Узел {nodeName} запущен на порту {httpPort} (не связанный)")
 
 
 def main():
@@ -311,7 +266,7 @@ def main():
 
     if len(sys.argv) < 5:
         print("Err!: Недостаточно аргументов")
-        print("Пример: AddNode.py <node_name> <http-порт> <p2p-порт> <пароль>")
+        print("Пример: CreateNewNode.py <node_name> <http-порт> <p2p-порт> <пароль>")
         sys.exit(1)
 
     nodeName = sys.argv[1]
@@ -323,26 +278,37 @@ def main():
 
     dataDir = BASE_DIR / "nodes" / nodeName / "data"
 
-    CheckDockerNetwork()
+    check = CheckDockerNetwork()
+    if not check:
+        print(f"Err!: Docker-сеть {DOCKER_NETWORK} не найдена!")
+        sys.exit(1)
+    else: print(f"Docker-сеть {DOCKER_NETWORK} существует!")
     print()
 
     CheckGenesisFile(genesisPath)
     print()
 
-    print("Создание изолированной ноды:")
+    print("Создание узла:")
     print(f"    HTTP: {httpPort}")
     print(f"    P2P: {p2pPort}\n\n")
 
     print("Создание аккаунта:")
     address = CreateAccount(dataDir, password)
 
-    print("\nИнициализация ноды:")
+    if not address:
+        print("Err!: Не удалось создать аккаунт")
+        sys.exit(1)
+    else: print(f"Создан аккаунт: {address}")
+    
+    print()
+
+    print("\nИнициализация узла:")
     InitializeNode(dataDir)
 
-    print("\nЗапуск ноды:")
+    print("\nЗапуск:")
     StartNode(nodeName, httpPort, p2pPort, dataDir)
 
-    print("\n\nНода запущена:")
+    print("\nУзел запущен:")
     print(f"Данные: {dataDir}")
     print(f"Адрес: {address}")
     print(f"Пароль: {password}")
