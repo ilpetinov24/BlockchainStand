@@ -54,7 +54,7 @@
 
 
 
-Пример использования:
+**Пример использования**:
 
 `python3 scripts/InitializeNetwork.py clique <chainId> <period> <gasLimit> <balanceInWei> <passwordForValidatorAccount>`
 
