@@ -656,3 +656,54 @@ def ShowNetworkInfo():
     print(f"Gateway: {config.get("Gateway")}")
 
     print(f"Узлов в сети: {len(netInfo.get("Containers"))}")
+
+
+def ShowNodeInfo(nodeName):
+    if not CheckNode(nodeName):
+        print("Узел на запущен!")
+        return False
+    
+
+    container = f"geth-{nodeName}"
+
+    ip = GetContainerDockerIp(container)
+
+    print(f"IP-адрес -- {ip}")
+
+    enode = GetEnode(nodeName)
+
+    if enode:
+        print(f"Enode -- {enode}")
+    else:
+        print("Не получилось получить Enode!")
+        return False
+    
+    commandsForGetBlock = [
+        "docker", "exec", container,
+        "geth", "--exec", "eth.blockNumber",
+        "attach", "/data/geth.ipc"
+    ]
+
+    output = subprocess.run(commandsForGetBlock, capture_output=True, text=True)
+
+    if output.returncode == 0:
+        print(f"Текущий блок: {output.stdout.strip()}")
+    else:
+        print("Не получилось найти информация о блоке!")
+        return False
+    
+    commandsForGetPeers = [
+        "docker", "exec", container,
+        "geth", "--exec", "net.peerCount",
+        "attach", "/data/geth.ipc"
+    ]
+
+    output = subprocess.run(commandsForGetPeers, capture_output=True, text=True)
+
+    if output.returncode == 0:
+        print(f"Пиры: {output.stdout.strip()}")
+    else:
+        print("Не получилось найти информацию о пирах!")
+        return False
+
+    return True
