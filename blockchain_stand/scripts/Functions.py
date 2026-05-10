@@ -200,33 +200,42 @@ def CreateAccount(dataDirectory, password):
 
 
 # Готово
-def CreateGenesisForClique(chainId, period, gasLimit, validatorAddr, balance, outputPath):
+def CreateGenesisForClique(chainId, period, gasLimit, validatorAddresses, validatorsBalance, outputPath):
     """
         Данная функция создает genesis.json для Clique (PoA).
 
         Файл сохраняется в outputPath.
     """
-    addressWithoutPrefix = validatorAddr
 
-    if addressWithoutPrefix.startswith("0x"):
-        addressWithoutPrefix = validatorAddr[2:]
+    extradata = "0x" + "0" * 64
 
-    extradata = "0x" + "0" * 64 + addressWithoutPrefix + "0" * 130
+    for address in validatorAddresses:
+        if address.startswith("0x"):
+            extradata += address[2:]
+        else:
+            extradata += address
+
+    extradata += "0" * 130
+
+    alloc = {}
+
+    i = 0
+    for address in validatorAddresses:
+        alloc[address] = {"balance": str(validatorsBalance[i])}
+        i += 1
 
     genesisFile = {
         "config": {
             "chainId": chainId,
             "clique": {
                 "period": period,
-                "epoch": 30000
+                "epoch": 3000
             }
         },
         "difficulty": "1",
         "gasLimit": str(gasLimit),
         "extradata": extradata,
-        "alloc": {
-            validatorAddr: {"balance": str(balance)}
-        }
+        "alloc": alloc
     }
 
     with open(outputPath, "w") as f:
@@ -339,12 +348,13 @@ def StartValidatorNode(chainId, nodeName, httpPort, p2pPort, dataDir, addr, pass
         "-v", f"{dataDir}:/data",
         DOCKER_IMAGE,
         "--datadir=/data",
+        "--syncmode=full",
         "--ipcpath", "/data/geth.ipc",
         f"--networkid={chainId}",
         "--http",
         "--http.addr=0.0.0.0",
         "--http.port=8545",
-        "--http.api=eth,net,web3,admin,miner,clique",
+        "--http.api=eth,net,web3,admin,clique,personal,miner",
         "--http.corsdomain=*",
         "--allow-insecure-unlock",
         "--mine",
@@ -384,12 +394,13 @@ def StartNode(nodeName, httpPort, p2pPort, dataDirectory):
         "-v", f"{dataDirectory}:/data",
         DOCKER_IMAGE,
         "--datadir=/data",
+        "--syncmode=full",
         "--ipcpath", "/data/geth.ipc",
         f"--networkid={chainId}",
         "--http",
         "--http.addr=0.0.0.0",
         "--http.port=8545",
-        "--http.api=eth,net,web3,admin",
+        "--http.api=eth,net,web3,admin,clique,personal,miner",
         "--http.corsdomain=*",
         "--allow-insecure-unlock",
         "--nodiscover",
@@ -706,4 +717,170 @@ def ShowNodeInfo(nodeName):
         print("Не получилось найти информацию о пирах!")
         return False
 
+    return True
+
+
+def GetNodeAddress(nodeName):
+    """
+        Ф-ия получает адрес кошелька узла по его имени
+    """
+
+    container = f"geth-{nodeName}"
+
+    # Получаем адрес через Geth
+    commandsForGet = [
+        "docker", "exec", container,
+        "geth", "--exec", "eth.accounts",
+        "attach", "/data/geth.ipc"
+    ]
+
+    output = subprocess.run(commandsForGet, capture_output=True,
+                            text=True)
+    
+    if not output.stdout.strip():
+        return None
+    
+    address = output.stdout[2:]
+    address = address[:len(address)-3]
+
+    if address.startswith("0x"):
+        return address
+    
+    return None
+        
+
+def IsValidator(nodeName):
+    container = f"geth-{nodeName}"
+    addressNode = GetNodeAddress(nodeName)
+    address = GetNodeAddress(nodeName)
+
+    if not address:
+        return False
+    
+    commandsForGetValidators = [
+        "docker", "exec", container,
+        "geth", "--exec", "clique.getSigners()",
+        "attach", "/data/geth.ipc"
+    ]
+
+    output = subprocess.run(commandsForGetValidators,
+                            capture_output=True, text=True)
+
+    if not output.stdout.strip():
+        return False
+    
+    validators = output.stdout.strip()
+
+    if address in validators:
+        return True
+    
+    return False
+
+
+def GetValidators():
+    """
+        Ф-ия возвращает список имён контейнеров-валидаторов.
+    """
+
+    validators = []
+
+    commandForGetContainers = [
+        "docker", "ps", "--filter", "name=geth",
+        "--format", "{{.Names}}"
+    ]
+
+    output = subprocess.run(commandForGetContainers,
+                            capture_output=True, text=True)
+    
+    if not output.stdout.strip():
+        return validators
+
+    containers = [it.strip() for it in output.stdout.split("\n") if it.strip()]
+
+    for container in containers:
+        nodeName = container.replace("geth-", "")
+
+        if IsValidator(nodeName):
+            validators.append(nodeName)
+
+    return validators
+
+
+def ValidatorVote(validatorName, address, flag=True):
+    """
+        Ф-ия отправляет предложение от валидатора
+
+        flag = True -- за добавление узла в список валидаторов
+        flag = False -- против
+    """
+    containerName = f"geth-{validatorName}"
+    
+    vote = "true" if flag else "false"
+    
+    commandsForVote = [
+        "docker", "exec", containerName,
+        "geth", "--exec", f"clique.propose('{address}', {vote})",
+        "attach", "/data/geth.ipc"
+    ]
+    
+    output = subprocess.run(commandsForVote, capture_output=True, text=True)
+    
+    return output.returncode == 0
+
+
+def CreateValidatorNode(nodeName, httpPort, p2pPort, password):
+    """
+        Сразу создаёт узел как валидатора (без голосования)
+    """
+    dataDir = BASE_DIR / "nodes" / nodeName / "data"
+    genesisPath = CONFIG_DIR / "genesis.json"
+    chainId = GetNetworkId()
+    containerName = f"geth-{nodeName}"
+    
+    # Создаём аккаунт
+    address = CreateAccount(dataDir, password)
+    if not address:
+        print("Err!: Не удалось создать аккаунт")
+        return False
+    
+    print(f"Создан аккаунт: {address}")
+    
+    # Инициализируем узел
+    if not InitializeNode(dataDir):
+        print("Err!: Не удалось инициализировать узел")
+        return False
+    
+    # Запускаем как валидатора (с майнингом)
+    dockerIp = GetNextFreeIp()
+    print(f"IP: {dockerIp}")
+    
+    RunCommands([
+        "docker", "run", "-d",
+        "--name", containerName,
+        "--network", DOCKER_NETWORK,
+        f"--ip={dockerIp}",
+        "-p", f"{httpPort}:8545",
+        "-p", f"{p2pPort}:30303",
+        "-v", f"{genesisPath}:/config/genesis.json:ro",
+        "-v", f"{dataDir}:/data",
+        DOCKER_IMAGE,
+        "--datadir=/data",
+        "--syncmode=full",
+        "--ipcpath", "/data/geth.ipc",
+        f"--networkid={chainId}",
+        "--http",
+        "--http.addr=0.0.0.0",
+        "--http.port=8545",
+        "--http.api=eth,net,web3,admin,clique,personal",
+        "--http.corsdomain=*",
+        "--allow-insecure-unlock",
+        "--nodiscover",
+        f"--nat=extip:{dockerIp}",
+        "--mine",
+        f"--miner.etherbase={address}",
+        f"--unlock={address}",
+        f"--password=/data/password.txt",
+    ])
+    
+    print(f"Узел-валидатор {nodeName} запущен!")
     return True
