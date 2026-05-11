@@ -13,6 +13,7 @@
 - Docker
 - Python
 - Geth (go-ethereum)
+- Solidity
 
 В качестве Docker-образа был выбран: `ethereum/client-go:v1.13.15`. Данный образ позволяет запускать узел в сети.
 
