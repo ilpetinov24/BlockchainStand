@@ -1,26 +1,20 @@
 from Functions import *
 
+
 def main():
     if not CheckDockerRun():
         print("Docker не запущен!")
         sys.exit(1)
-
+        
     if not CheckDockerNetwork():
         print(f"Err!: Docker-сеть {DOCKER_NETWORK} не найдена!")
         sys.exit(1)
     else: print(f"Docker-сеть {DOCKER_NETWORK} существует!")
 
-
-    nodes = GetAllNodes()
-
-    for node in nodes:
-        print(f"\nИнформация о узле {node}")
-
-        if ShowNodeInfo(node):
-            print("Успешно!\n")
-        else:
-            print("Ошибка!\n")
+    ShowNetworkInfo()
 
 
 if __name__ == "__main__":
     main()
+
+

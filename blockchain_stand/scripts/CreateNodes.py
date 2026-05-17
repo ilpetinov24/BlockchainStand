@@ -102,7 +102,7 @@ def main():
         print("   Успешно!")
         
         print("\nЗапуск узла:")
-        StartNode(nodeName, httpPort, p2pPort, dataDir)
+        StartNode(nodeName, httpPort, p2pPort, dataDir, address)
         
         newNodes.append({
             "name": nodeName,

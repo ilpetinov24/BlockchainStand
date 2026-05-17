@@ -53,7 +53,74 @@ def main():
 
     validators = []
 
-    print("Ввод данных для валидаторов:\n")
+    print("Создание узла-валидатора для раздачи монет обычным узлам:")
+    
+    mainValidatorName = "main_validator"
+    
+    if choice != "y":
+        mainPassword = input(f"Введите пароль для {mainValidatorName}: ").strip()
+        while not mainPassword:
+            print("Пароль должен быть не пустым!\n")
+            mainPassword = input(f"Введите пароль для {mainValidatorName}: ").strip()
+        
+        mainBalance = int(input(f"Введите баланс для {mainValidatorName} в wei: "))
+    else:
+        mainPassword = "password"
+        mainBalance = 1_000_000_000_000_000_000
+        print("Использованы параметры по умолчанию!")
+    
+    mainHttpPort = input(f"Введите http-порт для {mainValidatorName} (по умолчанию 8545): ")
+    if not mainHttpPort:
+        mainHttpPort = 8545
+    else:
+        mainHttpPort = int(mainHttpPort)
+    
+    mainP2pPort = input(f"Введите p2p-порт для {mainValidatorName} (по умолчанию 30303): ")
+    if not mainP2pPort:
+        mainP2pPort = 30303
+    else:
+        mainP2pPort = int(mainP2pPort)
+    
+    mainNodeDirectory = BASE_DIR / "nodes" / mainValidatorName / "data"
+    mainNodeDirectory.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\nСоздаем аккаунт для {mainValidatorName}:")
+    mainAddress = CreateAccount(mainNodeDirectory, mainPassword)
+    
+    if not mainAddress:
+        print(f"Err!: Не удалось создать аккаунт для {mainValidatorName}!")
+        sys.exit(1)
+    
+    print(f"Аккаунт создан: {mainAddress}")
+    
+    mainValidatorInfo = {
+        "name": mainValidatorName,
+        "address": mainAddress,
+        "httpPort": mainHttpPort,
+        "p2pPort": mainP2pPort,
+        "password": mainPassword,
+        "balance": mainBalance
+    }
+    
+    mainInfoPath = CONFIG_DIR / "main_validator_info.json"
+    with open(mainInfoPath, "w") as f:
+        json.dump(mainValidatorInfo, f, indent=2)
+    
+    print(f"\nИнформация о главном валидаторе сохранена в {mainInfoPath}\n")
+
+    validators.append({
+        "name": mainValidatorName,
+        "address": mainAddress,
+        "dataDir": mainNodeDirectory,
+        "password": mainPassword,
+        "balance": mainBalance,
+        "httpPort": mainHttpPort,
+        "p2pPort": mainP2pPort
+    })
+    
+    print(f"\nУзел-валидатор для раздачи {mainValidatorName} создан с балансом {mainBalance} wei\n")
+    
+    print("\nВвод данных для валидаторов:\n")
 
     for i in range(validatorsCount):
         nodeName = f"validator_node{i+1}"
@@ -67,17 +134,17 @@ def main():
             balance = int(input(f"Введите баланс для {nodeName} в wei: "))
         
         
-        httpPort = input(f"Введите http-порт для {nodeName} (по умолчанию 8545 + i): ")
+        httpPort = input(f"Введите http-порт для {nodeName} (по умолчанию 8546 + i): ")
         if not httpPort:
-            httpPort = 8545 + i
+            httpPort = 8546 + i
         else:
             httpPort = int(httpPort)
 
-        p2pPort = input(f"Введите p2p-порт для {nodeName} (по умолчанию 30303 + i): ")
+        p2pPort = input(f"Введите p2p-порт для {nodeName} (по умолчанию 30304 + i): ")
         if not p2pPort:
-            p2pPort = 30303 + i
+            p2pPort = 30304 + i
         else:
-            p2pPort = int(httpPort)
+            p2pPort = int(p2pPort)
 
         nodeDirectory = BASE_DIR / "nodes" / nodeName / "data"
         nodeDirectory.mkdir(parents=True, exist_ok=True)
@@ -102,7 +169,7 @@ def main():
         })
 
         print()
-    
+
 
 
     print("\n\nСоздание genesis.json для Clique (PoA):")

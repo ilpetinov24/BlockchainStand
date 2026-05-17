@@ -61,7 +61,7 @@ def main():
         sys.exit(1)
 
     print("\n3. Запуск:")
-    StartNode(nodeName, httpPort, p2pPort, dataDir)
+    StartNode(nodeName, httpPort, p2pPort, dataDir, address)
 
     print("\nУзел запущен:")
     print(f"Данные: {dataDir}")
