@@ -9,7 +9,7 @@ def main():
 
     if len(sys.argv) < 4:
         print("Err!: Недостаточно аргументов")
-        print("For example: CreateMultipleNodes.py <startHttpPort> <startP2pPort> <count>")
+        print("For example: CreateNodes.py <startHttpPort> <startP2pPort> <count>")
         sys.exit(1)
 
     startHttpPort = int(sys.argv[1])
@@ -19,6 +19,14 @@ def main():
     if count < 1:
         print("Err!: Количество узлов должно быть >= 1!")
         sys.exit(1)
+
+    
+    choice = input("Использовать для всех узлов параметры по умолчанию? y/n: ")
+    password = "password"
+
+    print("Параметры по умолчанию: ")
+    print("    password: \"password\"")
+
 
     genesisPath = CONFIG_DIR / "genesis.json"
 
@@ -69,12 +77,12 @@ def main():
         print(f"\n  Узел {i+1}: {nodeName}")
         print(f"    HTTP порт: {httpPort}")
         print(f"    P2P порт: {p2pPort}")
-        
-        password = input(f"Введите пароль для {nodeName}: ")
-        
-        while not password:
-            print("Пароль не может быть пустым!\n")
+        if choice != "y":
             password = input(f"Введите пароль для {nodeName}: ")
+            
+            while not password:
+                print("Пароль не может быть пустым!\n")
+                password = input(f"Введите пароль для {nodeName}: ")
         
         dataDir = BASE_DIR / "nodes" / nodeName / "data"
         
@@ -110,12 +118,12 @@ def main():
         print(f"    HTTP: http://localhost:{httpPort}")
         
         time.sleep(2)
+
+        print()
     
     print(f"\nСоздано узлов: {len(newNodes)}\n")
     
-    
-
-    print("\nСозданные узлы:")
+    print("\n\nСозданные узлы:")
     for node in newNodes:
         print(f"   {node['name']}: http://localhost:{node['httpPort']} (адрес: {node['address']})")
 

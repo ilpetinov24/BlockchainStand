@@ -12,9 +12,9 @@ def main():
         sys.exit(1)
 
 
-    if len(sys.argv) != 5:
+    if len(sys.argv) < 5:
         print("Err!: Недостаточно аргументов")
-        print("Use: clique <chainId> <period> <gasLimit>")
+        print("Use: InitializeNetwork.py clique <chainId> <period> <gasLimit>")
         sys.exit(1)
            
     chainId = int(sys.argv[2])
@@ -22,7 +22,7 @@ def main():
     gasLimit = int(sys.argv[4])
     
     try:
-        validatorsCount = int(input("\nВведите кол-во валидаторов (>=1):"))
+        validatorsCount = int(input("\nВведите кол-во валидаторов (>=1): "))
 
         if validatorsCount < 1:
             print("Err!: Кол-во валидаторов должно быть >= 1")
@@ -31,6 +31,18 @@ def main():
         print("Err!: Введите число!")
         sys.exit(1)
     
+    choice = input("Использовать для всех валидаторов параметры по умолчанию ?  y/n: ")
+    print("По умолчанию: ")
+    print("    password: \"password\"")
+    print("    balance: ", 1_000_000_000_000_000_000)
+
+
+    password = "password"
+    balance = 1_000_000_000_000_000_000
+
+    print()
+    
+
     print(f"Создание Docker-сети {DOCKER_NETWORK}")
     check = CreateDockerNetwork()
 
@@ -45,23 +57,23 @@ def main():
 
     for i in range(validatorsCount):
         nodeName = f"validator_node{i+1}"
-
-        password = input(f"Введите пароль для {nodeName}:").strip()
-        while not password:
-            print("Пароль должен быть не пустым!\n")
-            password = input(f"Введите пароль для {nodeName}:").strip()
-
-
-        balance = int(input(f"Введите баланс для {nodeName} в wei: "))
-
         
-        httpPort = input(f"Введите http-порт для {nodeName} (по умолчанию 8545 + i)")
+        if choice != "y":
+            password = input(f"Введите пароль для {nodeName}: ").strip()
+            while not password:
+                print("Пароль должен быть не пустым!\n")
+                password = input(f"Введите пароль для {nodeName}: ").strip()
+
+            balance = int(input(f"Введите баланс для {nodeName} в wei: "))
+        
+        
+        httpPort = input(f"Введите http-порт для {nodeName} (по умолчанию 8545 + i): ")
         if not httpPort:
             httpPort = 8545 + i
         else:
             httpPort = int(httpPort)
 
-        p2pPort = input(f"Введите p2p-порт для {nodeName} (по умолчанию 30303 + i)")
+        p2pPort = input(f"Введите p2p-порт для {nodeName} (по умолчанию 30303 + i): ")
         if not p2pPort:
             p2pPort = 30303 + i
         else:

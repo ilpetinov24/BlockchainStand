@@ -712,17 +712,20 @@ def ShowNodeInfo(nodeName):
     output = subprocess.run(commandsForGetPeers, capture_output=True, text=True)
 
     if output.returncode == 0:
-        print(f"Пиры: {output.stdout.strip()}")
+        print(f"Кол-во пиров: {output.stdout.strip()}")
     else:
         print("Не получилось найти информацию о пирах!")
         return False
+    
+    if IsValidator(nodeName): print("Узел является валидатором!")
+    else: print("Узел не валидатор!")    
 
     return True
 
 
 def GetNodeAddress(nodeName):
     """
-        Ф-ия получает адрес кошелька узла по его имени
+        Ф-ия получает адрес кошелька узла по его имениЫ
     """
 
     container = f"geth-{nodeName}"
@@ -826,61 +829,3 @@ def ValidatorVote(validatorName, address, flag=True):
     output = subprocess.run(commandsForVote, capture_output=True, text=True)
     
     return output.returncode == 0
-
-
-def CreateValidatorNode(nodeName, httpPort, p2pPort, password):
-    """
-        Сразу создаёт узел как валидатора (без голосования)
-    """
-    dataDir = BASE_DIR / "nodes" / nodeName / "data"
-    genesisPath = CONFIG_DIR / "genesis.json"
-    chainId = GetNetworkId()
-    containerName = f"geth-{nodeName}"
-    
-    # Создаём аккаунт
-    address = CreateAccount(dataDir, password)
-    if not address:
-        print("Err!: Не удалось создать аккаунт")
-        return False
-    
-    print(f"Создан аккаунт: {address}")
-    
-    # Инициализируем узел
-    if not InitializeNode(dataDir):
-        print("Err!: Не удалось инициализировать узел")
-        return False
-    
-    # Запускаем как валидатора (с майнингом)
-    dockerIp = GetNextFreeIp()
-    print(f"IP: {dockerIp}")
-    
-    RunCommands([
-        "docker", "run", "-d",
-        "--name", containerName,
-        "--network", DOCKER_NETWORK,
-        f"--ip={dockerIp}",
-        "-p", f"{httpPort}:8545",
-        "-p", f"{p2pPort}:30303",
-        "-v", f"{genesisPath}:/config/genesis.json:ro",
-        "-v", f"{dataDir}:/data",
-        DOCKER_IMAGE,
-        "--datadir=/data",
-        "--syncmode=full",
-        "--ipcpath", "/data/geth.ipc",
-        f"--networkid={chainId}",
-        "--http",
-        "--http.addr=0.0.0.0",
-        "--http.port=8545",
-        "--http.api=eth,net,web3,admin,clique,personal",
-        "--http.corsdomain=*",
-        "--allow-insecure-unlock",
-        "--nodiscover",
-        f"--nat=extip:{dockerIp}",
-        "--mine",
-        f"--miner.etherbase={address}",
-        f"--unlock={address}",
-        f"--password=/data/password.txt",
-    ])
-    
-    print(f"Узел-валидатор {nodeName} запущен!")
-    return True
